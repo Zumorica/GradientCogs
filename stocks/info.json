@@ -1,0 +1,12 @@
+{
+    "author" : ["Flame442 (Flame#2941) originally, modified by Zumorica."],
+    "install_msg" : "Thanks for installing stocks. Commands are all under the group command `[p]stocks`.\n\nThis cog assumes the bank is set to be a per-guild bank.",
+    "name" : "Stocks",
+    "short" : "Buy and sell stocks with bot currency.",
+    "requirements" : [],
+    "description" : "Buy and sell stocks with bot currency.",
+    "tags" : ["utility", "stock"],
+    "min_python_version": [3, 6, 0],
+    "hidden" : false,
+    "end_user_data_statement": "This cog stores a user id in order to know what stocks have been purchased by each user. Data is only collected when a user directly interacts with the cog and its commands."
+}
