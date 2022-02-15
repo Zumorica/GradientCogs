@@ -276,7 +276,7 @@ class Stocks(commands.Cog):
 			x["symbol"]: {
 				"realPrice" : x['regularMarketPrice'],
 				"change" : x["regularMarketChangePercent"],
-				"price": max(1, int(x['regularMarketPrice'] * conversion))
+				"price": max(1, round(x['regularMarketPrice'] * conversion))
 			}
 
 			for x in r if "regularMarketPrice" in x and x["regularMarketPrice"] is not None
