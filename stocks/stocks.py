@@ -48,20 +48,13 @@ class Stocks(commands.Cog):
 		"""Group command for stocks."""
 		pass
 
-	@stocks.command()
-	async def conversion(self, ctx: commands.Context):
-		"""Returns the current USD -> Currency conversion rate."""
-		conversion = await self.config.guild(ctx.guild).conversion()
-		currency = await bank.get_currency_name(ctx.guild)
-		await ctx.send(f'Current conversion rate: 1 USD = {conversion} {currency}')
-
 	@stocks.group()
+	@commands.guildowner_or_permissions(administrator=True)
 	async def set(self, ctx: commands.Context):
 		"""Group command for changing stock settings."""
 		pass
 
 	@set.command()
-	@commands.guildowner_or_permissions(administrator=True)
 	async def conversion(self, ctx: commands.Context, rate: int):
 		"""Sets the current USD -> Currency conversion rate. Must be greater than zero."""
 		if(rate <= 0):
@@ -71,6 +64,14 @@ class Stocks(commands.Cog):
 
 		await self.config.guild(ctx.guild).conversion.set(rate)
 		await ctx.tick()
+
+
+	@stocks.command()
+	async def conversion(self, ctx: commands.Context):
+		"""Returns the current USD -> Currency conversion rate."""
+		conversion = await self.config.guild(ctx.guild).conversion()
+		currency = await bank.get_currency_name(ctx.guild)
+		await ctx.send(f'Current conversion rate: 1 USD = {conversion} {currency}')
 
 	@stocks.command()
 	async def buy(self, ctx: commands.Context, name: str, shares: int):
