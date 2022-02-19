@@ -22,7 +22,6 @@
 
 # Forked from https://github.com/Flame442/FlameCogs
 
-from email.mime import base
 from typing import List
 import discord
 from redbot.core import bank
@@ -82,7 +81,7 @@ class Stocks(commands.Cog):
 			return
 		name = name.upper()
 		try:
-			stock_data = await self._get_stock_data(ctx, [name])
+			stock_data = await self.get_stock_data(ctx, [name])
 		except ValueError as e:
 			return await ctx.send(e)
 		if name not in stock_data:
@@ -122,7 +121,7 @@ class Stocks(commands.Cog):
 			return
 		name = name.upper()
 		try:
-			stock_data = await self._get_stock_data(ctx, [name])
+			stock_data = await self.get_stock_data(ctx, [name])
 		except ValueError as e:
 			return await ctx.send(e)
 		if name not in stock_data:
@@ -163,7 +162,7 @@ class Stocks(commands.Cog):
 			return
 
 		try:
-			stock_data = await self._get_stock_data(ctx, user_stocks.keys())
+			stock_data = await self.get_stock_data(ctx, user_stocks.keys())
 		except ValueError as e:
 			return await ctx.send(e)
 
@@ -234,7 +233,7 @@ class Stocks(commands.Cog):
 			stocks = stocks.union(set(data['stocks'].keys()))
 
 		try:
-			stock_data = await self._get_stock_data(ctx, list(stocks))
+			stock_data = await self.get_stock_data(ctx, list(stocks))
 		except ValueError as e:
 			return await ctx.send(e)
 
@@ -314,7 +313,7 @@ class Stocks(commands.Cog):
 		"""
 		name = name.upper()
 		try:
-			stock_data = await self._get_stock_data(ctx, [name])
+			stock_data = await self.get_stock_data(ctx, [name])
 		except ValueError as e:
 			return await ctx.send(e)
 		if name not in stock_data:
@@ -334,7 +333,7 @@ class Stocks(commands.Cog):
 
 		await ctx.send(f'**{name}:** {price} {currency} per share (${"%.3f" % real} <{emoji} {"%.2f" % change} %>).')
 
-	async def _get_stock_data(self, ctx: commands.Context, stocks: List[str]):
+	async def get_stock_data(self, ctx: commands.Context, stocks: List[str]):
 		"""
 		Returns a dict mapping stock symbols to a dict of their converted price and the total shares of that stock.
 
