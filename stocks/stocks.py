@@ -23,6 +23,7 @@
 # Forked from https://github.com/Flame442/FlameCogs
 
 from email.mime import base
+from typing import List
 import discord
 from redbot.core import bank
 from redbot.core import commands
@@ -42,13 +43,14 @@ class Stocks(commands.Cog):
 		self.config.register_guild(conversion = 10)
 		self.config.register_member(stocks = {})
 
+	@commands.guild_only()
 	@commands.group(aliases=['stock', 'stonks', 'stonk'])
-	async def stocks(self, ctx):
+	async def stocks(self, ctx: commands.Context):
 		"""Group command for stocks."""
 		pass
 
 	@stocks.command()
-	async def conversion(self, ctx):
+	async def conversion(self, ctx: commands.Context):
 		"""Returns the current USD -> Currency conversion rate."""
 		conversion = await self.config.guild(ctx.guild).conversion()
 		currency = await bank.get_currency_name(ctx.guild)
@@ -56,13 +58,18 @@ class Stocks(commands.Cog):
 
 	@stocks.command()
 	@commands.guildowner_or_permissions(administrator=True)
-	async def set_conversion(self, ctx, conversion: int):
-		"""Sets the current USD -> Currency conversion rate."""
+	async def set_conversion(self, ctx: commands.Context, conversion: int):
+		"""Sets the current USD -> Currency conversion rate. Must be greater than zero."""
+		if(conversion <= 0):
+			await ctx.react_quietly(reaction="❌")
+			await ctx.send_help()
+			return
+
 		await self.config.guild(ctx.guild).conversion.set(conversion)
 		await ctx.tick()
 
 	@stocks.command()
-	async def buy(self, ctx, name, shares: int):
+	async def buy(self, ctx: commands.Context, name: str, shares: int):
 		"""
 		Buy stocks.
 
@@ -103,7 +110,7 @@ class Stocks(commands.Cog):
 		)
 
 	@stocks.command()
-	async def sell(self, ctx, name, shares: int):
+	async def sell(self, ctx: commands.Context, name: str, shares: int):
 		"""
 		Sell stocks.
 
@@ -129,7 +136,7 @@ class Stocks(commands.Cog):
 			if shares > user_stocks[name]['count']:
 				await ctx.send(
 					f'You do not have enough shares of {name}. '
-					f'You only have {user_stocks[name]} share{plural}.'
+					f'You only have {user_stocks[name]["count"]} share{plural}.'
 				)
 				return
 			user_stocks[name]['count'] -= shares
@@ -143,44 +150,75 @@ class Stocks(commands.Cog):
 		)
 
 	@stocks.command()
-	async def list(self, ctx):
-		"""List your stocks."""
-		user_stocks = await self.config.member(ctx.author).stocks()
+	async def list(self, ctx: commands.Context, user: discord.Member = None):
+		"""List someone's stocks."""
+
+		if(user == None):
+			user = ctx.author
+
+		user_stocks = await self.config.member(user).stocks()
 
 		if(len(user_stocks.items()) == 0):
-			await ctx.send("You do not have any stocks.")
+			await ctx.send(f"{user.name} does not have any stocks.")
 			return
 
 		try:
 			stock_data = await self._get_stock_data(ctx, user_stocks.keys())
 		except ValueError as e:
 			return await ctx.send(e)
-		name_len = max(max(len(n) for n in user_stocks), 4) + 1
-		count_len = max(max(len(str(stock_data[n]['price'])) for n in user_stocks), 5) + 1
-		msg = '```\nName'
-		msg += ' ' * (name_len - 4)
-		msg += '| Count'
-		msg += ' ' * (count_len - 5)
-		msg += '| Price\n'
-		msg += '-' * (9 + name_len + count_len)
-		msg += '\n'
-		for stock in user_stocks:
-			if stock in stock_data:
-				p = stock_data[stock]['price']
-				pt = p * user_stocks[stock]['count']
-				price = f"{pt} ({p} per share)"
+
+		embed_requested = await ctx.embed_requested()
+		base_embed = discord.Embed()
+		base_embed.set_author(name=f"{user.name} - Stocks", icon_url=user.avatar_url)
+		base_table = PrettyTable(field_names=["#", "Name", "Shares", "Value", "Price"])
+		base_table.set_style(prettytable.PLAIN_COLUMNS)
+		base_table.right_padding_width = 2
+		base_table.align = "l"
+		base_table.align["Value"] = base_table.align["Shares"] = base_table.align["Price"] = "r"
+
+		temp_table = base_table.copy()
+
+		pages = []
+
+		def make_embed():
+			nonlocal temp_table, pages
+			msg = temp_table.get_string()
+
+			if(embed_requested):
+				embed = base_embed.copy()
+				embed.description = box(msg, lang="md")
+				embed.set_footer(text=f"Page {len(pages)+1}/{ceil(len(user_stocks)/10)}")
+				pages.append(embed)
 			else:
-				price = 'Unknown'
-			msg += f'{stock}'
-			msg += ' ' * (name_len - len(stock))
-			msg += f'| {user_stocks[stock]["count"]}'
-			msg +=	' ' * (count_len - len(str(user_stocks[stock]['count'])))
-			msg += f'| {price}\n'
-		msg += '```'
-		await ctx.send(msg)
+				pages.append(box(msg, lang="md"))
+
+			temp_table = base_table.copy()
+
+		for idx, stock in enumerate(user_stocks, start=1):
+			if stock in stock_data:
+				price = stock_data[stock]["price"]
+			else:
+				price = 0
+
+			count = user_stocks[stock]["count"]
+			temp_table.add_row([f"{idx}.", stock, count, price * count, price])
+			
+			if(idx % 10 == 0):
+				make_embed()
+
+		if(len(pages) != ceil(len(user_stocks)/10)):
+			make_embed()
+
+		if not pages:
+			await ctx.send(f"{user.name} does not have any stocks.")
+			return
+
+		c = DEFAULT_CONTROLS if len(pages) > 1 else {"\N{CROSS MARK}": close_menu}
+
+		await menu(ctx, pages, c)
 
 	@stocks.command()
-	async def leaderboard(self, ctx):
+	async def leaderboard(self, ctx: commands.Context):
 		"""Show a leaderboard of total stock value by user."""
 		# TODO: convert to buttons whenever I get around to 3.5 support
 		raw = await self.config.all_members()
@@ -268,7 +306,7 @@ class Stocks(commands.Cog):
 		await menu(ctx, pages, c)
 
 	@stocks.command()
-	async def price(self, ctx, name):
+	async def price(self, ctx: commands.Context, name: str):
 		"""
 		View the price of a stock.
 
@@ -286,9 +324,17 @@ class Stocks(commands.Cog):
 		real = stock_data[name]['realPrice']
 		change = stock_data[name]['change']
 		currency = await bank.get_currency_name(ctx.guild)
-		await ctx.send(f'**{name}:** {price} {currency} per share (${real} <{change} %>).')
 
-	async def _get_stock_data(self, ctx, stocks: list):
+		if(change == 0):
+			emoji = ""
+		elif(change < 0):
+			emoji = "📉"
+		elif(change > 0):
+			emoji = "📈"
+
+		await ctx.send(f'**{name}:** {price} {currency} per share (${"%.3f" % real} <{emoji} {"%.2f" % change} %>).')
+
+	async def _get_stock_data(self, ctx: commands.Context, stocks: List[str]):
 		"""
 		Returns a dict mapping stock symbols to a dict of their converted price and the total shares of that stock.
 
