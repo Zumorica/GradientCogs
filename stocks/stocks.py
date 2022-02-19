@@ -22,13 +22,16 @@
 
 # Forked from https://github.com/Flame442/FlameCogs
 
+from email.mime import base
 import discord
 from redbot.core import bank
 from redbot.core import commands
 from redbot.core import Config
-from redbot.core.utils.chat_formatting import pagify
+from redbot.core.utils.chat_formatting import pagify, box
 from redbot.core.utils.menus import menu, DEFAULT_CONTROLS, close_menu
-import aiohttp
+from prettytable import PrettyTable
+from math import ceil
+import aiohttp, prettytable
 
 
 class Stocks(commands.Cog):
@@ -186,40 +189,82 @@ class Stocks(commands.Cog):
 			await ctx.send("Nobody owns any stocks yet!")
 			return
 
-		raw = raw[ctx.guild.id]
-
+		raw = raw[ctx.guild.id]		
 		stocks = set()
+
 		for uid, data in raw.items():
 			stocks = stocks.union(set(data['stocks'].keys()))
+
 		try:
 			stock_data = await self._get_stock_data(ctx, list(stocks))
 		except ValueError as e:
 			return await ctx.send(e)
+
 		processed = []
+
 		for uid, data in raw.items():
-			total = 0
+			total_value = 0
+			total_shares = 0
 			for ticker, stock in data['stocks'].items():
 				if ticker not in stock_data:
 					continue
-				total += stock['count'] * stock_data[ticker]['price']
-			if not total:
+				total_value += stock['count'] * stock_data[ticker]['price']
+				total_shares += stock['count']
+			if not total_shares:
 				continue
-			processed.append((uid, total))
+			processed.append((uid, total_value, total_shares))
+		
 		processed.sort(key=lambda a: a[1], reverse=True)
-		result = ''
+		
+		embed_requested = await ctx.embed_requested()
+		base_embed = discord.Embed()
+		base_embed.set_author(name=f"{ctx.guild.name} - Stocks", icon_url=ctx.guild.icon_url)
+		base_table = PrettyTable(field_names=["#", "Name", "Value", "Shares"])
+		base_table.set_style(prettytable.PLAIN_COLUMNS)
+		base_table.right_padding_width = 2
+		base_table.align = "l"
+		base_table.align["Value"] = base_table.align["Shares"] = "r"
+
+		temp_table = base_table.copy()
+
+		pages = []
+
+		def make_embed():
+			nonlocal temp_table, pages
+			msg = temp_table.get_string()
+
+			if(embed_requested):
+				embed = base_embed.copy()
+				embed.description = box(msg, lang="md")
+				embed.set_footer(text=f"Page {len(pages)+1}/{ceil(len(processed)/10)}")
+				pages.append(embed)
+			else:
+				pages.append(box(msg, lang="md"))
+
+			temp_table = base_table.copy()
+
 		for idx, data in enumerate(processed, start=1):
-			uid, total = data
+			uid, total_value, total_shares = data
 			user = self.bot.get_user(uid)
 			if user:
 				user = user.name
 			else:
-				user = '<Unknown user `{uid}`>'
-			result += f'{idx}. {total} - {user}\n'
-		pages = [f'```md\n{x}```' for x in pagify(result, shorten_by=10)]
+				user = f'<Unknown user `{uid}`>'
+
+			temp_table.add_row([f"{idx}.", user, total_value, total_shares])
+
+			if(idx % 10 == 0):
+				make_embed()
+
+		if(len(pages) != ceil(len(processed)/10)):
+			make_embed()
+
 		if not pages:
 			await ctx.send('Nobody owns any stocks yet!')
 			return
+
 		c = DEFAULT_CONTROLS if len(pages) > 1 else {"\N{CROSS MARK}": close_menu}
+
 		await menu(ctx, pages, c)
 
 	@stocks.command()

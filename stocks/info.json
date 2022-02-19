@@ -3,7 +3,7 @@
     "install_msg" : "Thanks for installing stocks. Commands are all under the group command `[p]stocks`.\n\nThis cog assumes the bank is set to be a per-guild bank.",
     "name" : "Stocks",
     "short" : "Buy and sell stocks with bot currency.",
-    "requirements" : [],
+    "requirements" : ["prettytable"],
     "description" : "Buy and sell stocks with bot currency.",
     "tags" : ["utility", "stock"],
     "min_python_version": [3, 6, 0],
