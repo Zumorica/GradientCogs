@@ -190,7 +190,7 @@ class Stocks(commands.Cog):
 		embed_requested = await ctx.embed_requested()
 		base_embed = discord.Embed()
 		base_embed.set_author(name=f"{user.name} - Stocks", icon_url=user.avatar_url)
-		base_table = PrettyTable(field_names=["#", "Name", "Shares", "Value", "Price", "Investment", "Change"])
+		base_table = PrettyTable(field_names=["#", "Name", "Shares", "Value", "Price", "Investment", "Profit"])
 		base_table.set_style(prettytable.PLAIN_COLUMNS)
 		base_table.right_padding_width = 2
 		base_table.align = "l"
@@ -200,7 +200,7 @@ class Stocks(commands.Cog):
 				base_table.align["Price"] =\
 					base_table.align["Investment"] = "r"
 
-		base_table.align["Change"] = "m"
+		base_table.align["Profit"] = "m"
 
 		temp_table = base_table.copy()
 
@@ -300,7 +300,7 @@ class Stocks(commands.Cog):
 		embed_requested = await ctx.embed_requested()
 		base_embed = discord.Embed()
 		base_embed.set_author(name=f"{ctx.guild.name} - Stocks", icon_url=ctx.guild.icon_url)
-		base_table = PrettyTable(field_names=["#", "Name", "Value", "Shares", "Investment", "Change"])
+		base_table = PrettyTable(field_names=["#", "Name", "Value", "Shares", "Investment", "Profit"])
 		base_table.set_style(prettytable.PLAIN_COLUMNS)
 		base_table.right_padding_width = 2
 		base_table.align = "l"
@@ -309,7 +309,7 @@ class Stocks(commands.Cog):
 			 base_table.align["Shares"] =\
 				 base_table.align["Investment"] = "r"
 
-		base_table.align["Change"] = "m"
+		base_table.align["Profit"] = "m"
  
 		temp_table = base_table.copy()
 
