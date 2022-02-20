@@ -94,23 +94,29 @@ class Stocks(commands.Cog):
 			await ctx.send(f'I couldn\'t find any data for the stock {name}. Please try another stock.')
 			return
 		price = stock_data[name]['price']
+		total = shares * price
 		try:
-			bal = await bank.withdraw_credits(ctx.author, shares * price)
+			bal = await bank.withdraw_credits(ctx.author, total)
 		except ValueError:
 			bal = await bank.get_balance(ctx.author)
 			await ctx.send(
 				f'You cannot afford {shares} share{plural} of {name}. '
-				f'It would cost {price * shares} {currency} ({price} {currency} each). '
+				f'It would cost {total} {currency} ({price} {currency} each). '
 				f'You only have {bal} {currency}.'
 			)
 			return
 		async with self.config.member(ctx.author).stocks() as user_stocks:
 			if name in user_stocks:
 				user_stocks[name]['count'] += shares
+
+				if('investment' not in user_stocks[name]):
+					user_stocks[name]['investment'] = (user_stocks[name]['count'] - shares) * price
+
+				user_stocks[name]['investment'] += total
 			else:
-				user_stocks[name] = {'count': shares}
+				user_stocks[name] = {'count': shares, 'investment': total}
 		await ctx.send(
-			f'You purchased {shares} share{plural} of {name} for {price * shares} {currency} '
+			f'You purchased {shares} share{plural} of {name} for {total} {currency} '
 			f'({price} {currency} each).\nYou now have {bal} {currency}.'
 		)
 
@@ -134,6 +140,7 @@ class Stocks(commands.Cog):
 			await ctx.send(f'I couldn\'t find any data for the stock {name}. Please try another stock.')
 			return
 		price = stock_data[name]['price']
+		total = shares * price
 		async with self.config.member(ctx.author).stocks() as user_stocks:
 			if name not in user_stocks:
 				await ctx.send(f'You do not have any shares of {name}.')
@@ -145,12 +152,20 @@ class Stocks(commands.Cog):
 				)
 				return
 			user_stocks[name]['count'] -= shares
+
+			if('investment' not in user_stocks[name]):
+				user_stocks[name]['investment'] = (user_stocks[name]['count'] + shares) * price
+
+			investment = user_stocks[name]['investment']
+			user_stocks[name]['investment'] = max(0, investment - total)
+
 			if user_stocks[name]['count'] == 0:
 				del user_stocks[name]
-		bal = await bank.deposit_credits(ctx.author, shares * price)
+
+		bal = await bank.deposit_credits(ctx.author, total)
 		currency = await bank.get_currency_name(ctx.guild)
 		await ctx.send(
-			f'You sold {shares} share{plural} of {name} for {price * shares} {currency} '
+			f'You sold {shares} share{plural} of {name} for {total} {currency} '
 			f'({price} {currency} each).\nYou now have {bal} {currency}.'
 		)
 
@@ -175,11 +190,17 @@ class Stocks(commands.Cog):
 		embed_requested = await ctx.embed_requested()
 		base_embed = discord.Embed()
 		base_embed.set_author(name=f"{user.name} - Stocks", icon_url=user.avatar_url)
-		base_table = PrettyTable(field_names=["#", "Name", "Shares", "Value", "Price"])
+		base_table = PrettyTable(field_names=["#", "Name", "Shares", "Value", "Price", "Investment", "Change"])
 		base_table.set_style(prettytable.PLAIN_COLUMNS)
 		base_table.right_padding_width = 2
 		base_table.align = "l"
-		base_table.align["Value"] = base_table.align["Shares"] = base_table.align["Price"] = "r"
+		
+		base_table.align["Value"] =\
+			base_table.align["Shares"] =\
+				base_table.align["Price"] =\
+					base_table.align["Investment"] = "r"
+
+		base_table.align["Change"] = "m"
 
 		temp_table = base_table.copy()
 
@@ -206,7 +227,15 @@ class Stocks(commands.Cog):
 				price = 0
 
 			count = user_stocks[stock]["count"]
-			temp_table.add_row([f"{idx}.", stock, count, price * count, price])
+			total = price * count
+
+			if('investment' not in user_stocks[stock]):
+				user_stocks[stock]['investment'] = count * price
+
+			investment = user_stocks[stock]['investment']
+			percentage = ((total / investment) - 1.0) * 100.0
+
+			temp_table.add_row([f"{idx}.", stock, count, total, price, investment, self.pretty_percentage(percentage)])
 			
 			if(idx % 10 == 0):
 				make_embed()
@@ -248,26 +277,40 @@ class Stocks(commands.Cog):
 		for uid, data in raw.items():
 			total_value = 0
 			total_shares = 0
+			total_investment = 0
 			for ticker, stock in data['stocks'].items():
 				if ticker not in stock_data:
 					continue
 				total_value += stock['count'] * stock_data[ticker]['price']
 				total_shares += stock['count']
+
+				if("investment" not in stock):
+					stock["investment"] = stock["count"] * stock_data[ticker]["price"]
+
+				total_investment += stock["investment"]
 			if not total_shares:
 				continue
-			processed.append((uid, total_value, total_shares))
+
+			change = ((total_value / total_investment) - 1.0) * 100.0
+
+			processed.append((uid, total_value, total_shares, total_investment, change))
 		
 		processed.sort(key=lambda a: a[1], reverse=True)
 		
 		embed_requested = await ctx.embed_requested()
 		base_embed = discord.Embed()
 		base_embed.set_author(name=f"{ctx.guild.name} - Stocks", icon_url=ctx.guild.icon_url)
-		base_table = PrettyTable(field_names=["#", "Name", "Value", "Shares"])
+		base_table = PrettyTable(field_names=["#", "Name", "Value", "Shares", "Investment", "Change"])
 		base_table.set_style(prettytable.PLAIN_COLUMNS)
 		base_table.right_padding_width = 2
 		base_table.align = "l"
-		base_table.align["Value"] = base_table.align["Shares"] = "r"
 
+		base_table.align["Value"] =\
+			 base_table.align["Shares"] =\
+				 base_table.align["Investment"] = "r"
+
+		base_table.align["Change"] = "m"
+ 
 		temp_table = base_table.copy()
 
 		pages = []
@@ -287,14 +330,14 @@ class Stocks(commands.Cog):
 			temp_table = base_table.copy()
 
 		for idx, data in enumerate(processed, start=1):
-			uid, total_value, total_shares = data
+			uid, total_value, total_shares, investment, percentage = data
 			user = self.bot.get_user(uid)
 			if user:
 				user = user.name
 			else:
 				user = f'<Unknown user `{uid}`>'
 
-			temp_table.add_row([f"{idx}.", user, total_value, total_shares])
+			temp_table.add_row([f"{idx}.", user, total_value, total_shares, investment, self.pretty_percentage(percentage)])
 
 			if(idx % 10 == 0):
 				make_embed()
@@ -330,14 +373,15 @@ class Stocks(commands.Cog):
 		change = stock_data[name]['change']
 		currency = await bank.get_currency_name(ctx.guild)
 
-		if(change == 0):
-			emoji = ""
-		elif(change < 0):
-			emoji = "📉"
-		elif(change > 0):
-			emoji = "📈"
+		await ctx.send(f'**{name}:** {price} {currency} per share (${"%.3f" % real} <{self.pretty_percentage(change)}>).')
 
-		await ctx.send(f'**{name}:** {price} {currency} per share (${"%.3f" % real} <{emoji} {"%.2f" % change} %>).')
+	def pretty_percentage(self, number: float) -> str:
+		if(number > 0):
+			sign = "+"
+		else:
+			sign = ""
+
+		return f"{sign}{'%.2f' % number} %"
 
 	async def get_stock_data(self, ctx: commands.Context, stocks: List[str]):
 		"""
