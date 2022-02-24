@@ -29,6 +29,7 @@ from redbot.core import commands
 from redbot.core import Config
 from redbot.core.utils.chat_formatting import pagify, box
 from redbot.core.utils.menus import menu, DEFAULT_CONTROLS, close_menu
+from redbot.core.bot import Red
 from prettytable import PrettyTable
 from math import ceil
 import aiohttp, prettytable
@@ -37,7 +38,7 @@ import aiohttp, prettytable
 class Stocks(commands.Cog):
 	"""Buy and sell stocks with bot currency."""
 	def __init__(self, bot):
-		self.bot = bot
+		self.bot: Red = bot
 		self.config = Config.get_conf(self, identifier=8712341782873811)
 		self.config.register_guild(conversion = 10)
 		self.config.register_member(stocks = {})
@@ -172,7 +173,6 @@ class Stocks(commands.Cog):
 	@stocks.command()
 	async def list(self, ctx: commands.Context, user: discord.Member = None):
 		"""List someone's stocks."""
-
 		if(user == None):
 			user = ctx.author
 
@@ -230,7 +230,9 @@ class Stocks(commands.Cog):
 			total = price * count
 
 			if('investment' not in user_stocks[stock]):
-				user_stocks[stock]['investment'] = count * price
+				async with self.config.member(user).stocks() as s:
+					s[stock]['investment'] = count * price
+					user_stocks[stock]['investment'] = count * price
 
 			investment = user_stocks[stock]['investment']
 			percentage = ((total / investment) - 1.0) * 100.0
@@ -257,11 +259,13 @@ class Stocks(commands.Cog):
 		# TODO: convert to buttons whenever I get around to 3.5 support
 		raw = await self.config.all_members()
 
-		if(ctx.guild.id not in raw):
+		guild: discord.Guild = ctx.guild
+
+		if(guild.id not in raw):
 			await ctx.send("Nobody owns any stocks yet!")
 			return
 
-		raw = raw[ctx.guild.id]		
+		raw = raw[guild.id]		
 		stocks = set()
 
 		for uid, data in raw.items():
@@ -278,6 +282,7 @@ class Stocks(commands.Cog):
 			total_value = 0
 			total_shares = 0
 			total_investment = 0
+			member = guild.get_member(uid)
 			for ticker, stock in data['stocks'].items():
 				if ticker not in stock_data:
 					continue
@@ -286,6 +291,9 @@ class Stocks(commands.Cog):
 
 				if("investment" not in stock):
 					stock["investment"] = stock["count"] * stock_data[ticker]["price"]
+					if(member is not None):
+						async with self.config.member(member).stocks() as s:
+							s[ticker]["investment"] = stock["investment"]
 
 				total_investment += stock["investment"]
 			if not total_shares:
@@ -299,7 +307,7 @@ class Stocks(commands.Cog):
 		
 		embed_requested = await ctx.embed_requested()
 		base_embed = discord.Embed()
-		base_embed.set_author(name=f"{ctx.guild.name} - Stocks", icon_url=ctx.guild.icon_url)
+		base_embed.set_author(name=f"{guild.name} - Stocks", icon_url=guild.icon_url)
 		base_table = PrettyTable(field_names=["#", "Name", "Value", "Shares", "Investment", "Profit"])
 		base_table.set_style(prettytable.PLAIN_COLUMNS)
 		base_table.right_padding_width = 2
