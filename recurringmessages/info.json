@@ -1,0 +1,12 @@
+{
+    "author" : ["Zumorica"],
+    "install_msg" : "Thanks for installing recurring messages. Commands are all under the group command `[p]recurring`.",
+    "name" : "Recurring Messages",
+    "short" : "Send recurring messages to a channel on an interval.",
+    "requirements" : ["prettytable"],
+    "description" : "Send recurring messages to a channel on an interval.",
+    "tags" : ["utility", "recurring", "message", "reminder"],
+    "min_python_version": [3, 6, 0],
+    "hidden" : false,
+    "end_user_data_statement": ""
+}
