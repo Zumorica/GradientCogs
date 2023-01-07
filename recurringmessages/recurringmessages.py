@@ -54,7 +54,7 @@ class RecurringMessages(commands.Cog):
 		last_sent = str(date.min)
 
 		if(reminder_time < current_time):
-			last_sent = str(datetime.utcnow().date)
+			last_sent = str(datetime.utcnow().date())
 
 		async with self.config.guild(ctx.guild).reminders() as guild_reminders:
 			new_id = (await self.config.guild(ctx.guild).last_id()) + 1
